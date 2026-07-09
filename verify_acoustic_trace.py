@@ -657,18 +657,24 @@ def test_directivity_on_clear_path() -> None:
 
 
 def test_mam_resonance_and_double_leaf() -> None:
-	"""MAM resonance is physical; above f_msm STL exceeds coupled single-leaf."""
+	"""MAM resonance dips STL; above f_msm STL exceeds coupled single-leaf."""
 	from acoustics.materials import double_leaf_stl_db, mam_resonance_hz, mass_law_stl_db
 
 	f_msm = mam_resonance_hz(12.0, 12.0, gap_m=0.05)
 	assert 50.0 < f_msm < 400.0
-	# Below resonance: near coupled mass law on (ms1+ms2).
-	stl_low = double_leaf_stl_db(12.0, 12.0, f_msm * 0.5, gap_m=0.05)
-	coupled = mass_law_stl_db(24.0, f_msm * 0.5)
-	assert abs(stl_low - coupled) < 1.0
-	# Above resonance: higher STL than coupled.
+	# Well below resonance: near coupled mass law (dip is small far from f_msm).
+	stl_low = double_leaf_stl_db(12.0, 12.0, f_msm * 0.25, gap_m=0.05)
+	coupled_low = mass_law_stl_db(24.0, f_msm * 0.25)
+	assert abs(stl_low - coupled_low) < 2.0
+	# At resonance: clear MAM transmission dip vs coupled curve at same f.
+	stl_dip = double_leaf_stl_db(12.0, 12.0, f_msm, gap_m=0.05)
+	coupled_at = mass_law_stl_db(24.0, f_msm)
+	assert stl_dip < coupled_at - 8.0
+	# Above resonance: higher STL than coupled single-leaf.
 	stl_high = double_leaf_stl_db(12.0, 12.0, f_msm * 4.0, gap_m=0.05)
-	assert stl_high > coupled
+	coupled_high = mass_law_stl_db(24.0, f_msm * 4.0)
+	assert stl_high > coupled_high
+	assert stl_high > stl_dip
 
 
 def test_dynamic_rt60_door_open_longer() -> None:
@@ -693,6 +699,75 @@ def test_dynamic_rt60_door_open_longer() -> None:
 		door_open_frac=1.0,
 	)
 	assert rt_open > rt_closed
+
+
+def test_live_rt60_on_traced_link_tracks_door() -> None:
+	"""Traced AcousticLink.rt60_s rises when the door opens (live Sabine)."""
+	room, door = build_small_level()
+	scene = AcousticScene()
+	eye = (6.0, 1.6, 6.0)
+	source = AcousticSource(source_id=1, position=SMALL_TABLE_RADIO_POS, enabled=True)
+	occluders, materials = scene.build_occluders(room, door)
+	closed = trace_acoustic_path(
+		eye,
+		source,
+		occluders,
+		room.boundaries,
+		occluder_materials=materials,
+		room_name=room.name,
+		door_open_frac=0.0,
+		shell_material=room.shell_material,
+	)
+	opened = trace_acoustic_path(
+		eye,
+		source,
+		occluders,
+		room.boundaries,
+		occluder_materials=materials,
+		room_name=room.name,
+		door_open_frac=1.0,
+		shell_material=room.shell_material,
+	)
+	assert closed.rt60_s > 0.0
+	assert opened.rt60_s > closed.rt60_s
+
+
+def test_reverb_predelay_matches_first_reflection() -> None:
+	"""Late-bus predelay equals the earliest specular tap delay."""
+	room, door = build_small_level()
+	scene = AcousticScene()
+	eye = (6.0, 1.6, 6.0)
+	source = AcousticSource(source_id=1, position=SMALL_TABLE_RADIO_POS, enabled=True)
+	occluders, materials = scene.build_occluders(room, door)
+	link = trace_acoustic_path(
+		eye,
+		source,
+		occluders,
+		room.boundaries,
+		occluder_materials=materials,
+		room_name=room.name,
+		door_open_frac=0.0,
+		shell_material=room.shell_material,
+	)
+	assert link.reflection_taps
+	earliest = min(tap.delay_s for tap in link.reflection_taps if tap.delay_s > 0.0)
+	assert abs(link.reverb_predelay_s - earliest) < 1e-4
+
+
+def test_door_panel_mam_closed_transmission() -> None:
+	"""Closed metal door uses double-leaf MAM panel transmission (not zero)."""
+	from acoustics.portals import door_panel_transmission, door_transmission_for_angle
+
+	panel_g, panel_lpf = door_panel_transmission()
+	assert 0.0 < panel_g < 0.35
+	assert 180.0 <= panel_lpf <= 4_000.0
+	room, door = build_small_level()
+	closed_g, _ = door_transmission_for_angle(door)
+	assert abs(closed_g - panel_g) < 1e-6
+	door.open_angle = 0.4
+	crack_g, crack_lpf = door_transmission_for_angle(door)
+	assert crack_g > closed_g
+	assert crack_lpf > panel_lpf
 
 
 def test_occluder_furniture_reduces_rt60() -> None:
@@ -785,6 +860,8 @@ def test_reverb_predelay_field_on_link() -> None:
 	assert link.reverb_predelay_s >= 0.0
 	if link.reflection_taps:
 		assert link.reverb_predelay_s > 0.0
+		earliest = min(t.delay_s for t in link.reflection_taps if t.delay_s > 0.0)
+		assert abs(link.reverb_predelay_s - earliest) < 1e-4
 
 
 def test_transition_order_constant() -> None:
@@ -882,6 +959,58 @@ def test_portal_graph_boost_when_blocked() -> None:
 	assert closed == 0.0
 
 
+# --- Phase 1 acceptance aliases (wave_physics_phase1.plan.md names) ---
+
+
+def test_iso9613_monotonic() -> None:
+	"""Plan alias: ISO 9613 α(f) rises with frequency."""
+	test_iso9613_alpha_increases_with_frequency()
+
+
+def test_tap_arrival_azimuth() -> None:
+	"""Plan alias: specular taps carry arrival directions for pan/HRTF."""
+	test_reflection_taps_have_arrival_direction()
+	az, _el = world_dir_to_listener_angles((1.0, 0.0, 0.0), yaw_rad=0.0)
+	assert abs(az - math.atan2(1.0, 0.0)) < 0.05
+
+
+def test_cardioid_gain() -> None:
+	"""Plan alias: cardioid G(θ) is louder on-axis than behind."""
+	test_cardioid_directivity()
+
+
+def test_diffuse_tap_energy() -> None:
+	"""Plan alias: diffuse companion taps carry less energy than specular parents."""
+	test_diffuse_scatter_taps_present()
+	room, door = build_small_level()
+	scene = AcousticScene()
+	eye = (6.0, 1.6, 6.0)
+	source = AcousticSource(source_id=1, position=SMALL_TABLE_RADIO_POS, enabled=True)
+	occluders, materials = scene.build_occluders(room, door)
+	link = trace_acoustic_path(
+		eye,
+		source,
+		occluders,
+		room.boundaries,
+		occluder_materials=materials,
+		room_name=room.name,
+	)
+	specular = [t for t in link.reflection_taps if not t.is_diffuse]
+	diffuse = [t for t in link.reflection_taps if t.is_diffuse]
+	assert specular and diffuse
+	assert max(t.gain for t in diffuse) <= max(t.gain for t in specular) + 1e-6
+
+
+def test_band_energy_splits() -> None:
+	"""Plan alias: 6-band energy maps to low/mid/high pressure gains."""
+	test_band_energy_three_band_split()
+
+
+def test_material_variants() -> None:
+	"""Plan alias: concrete / metal presets differ in scatter."""
+	test_material_variants_differ()
+
+
 if __name__ == "__main__":
 	test_clear_path_same_side_of_divider()
 	test_wall_blocks_radio()
@@ -920,6 +1049,9 @@ if __name__ == "__main__":
 	test_directivity_on_clear_path()
 	test_mam_resonance_and_double_leaf()
 	test_dynamic_rt60_door_open_longer()
+	test_live_rt60_on_traced_link_tracks_door()
+	test_reverb_predelay_matches_first_reflection()
+	test_door_panel_mam_closed_transmission()
 	test_occluder_furniture_reduces_rt60()
 	test_flutter_period_2L_over_c()
 	test_modes_below_schroeder()
@@ -933,4 +1065,10 @@ if __name__ == "__main__":
 	test_structure_borne_on_clear_path()
 	test_max_taps_budget()
 	test_portal_graph_boost_when_blocked()
+	test_iso9613_monotonic()
+	test_tap_arrival_azimuth()
+	test_cardioid_gain()
+	test_diffuse_tap_energy()
+	test_band_energy_splits()
+	test_material_variants()
 	print("verify_acoustic_trace: all passed")

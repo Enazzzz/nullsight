@@ -1,12 +1,28 @@
 # Wave Physics Master Plan — NULLSIGHT Acoustics
 
+**Role:** Overview and shared reference. Per-phase scope, tasks, and acceptance live in the linked phase plans below.
+
+---
+
 ## Executive summary
 
-NULLSIGHT uses a **hybrid geometric-acoustics pipeline** (Allen–Berkley ISM + AABB specular + UTD diffraction on the game side; Spherion HOA/HRTF + delay taps + Schroeder late bus on the audio side). This plan maps all 21 requested features to physically grounded models, cites the standards and literature, and phases implementation so each step is testable at 20 Hz trace rate on wireframe FPS.
+NULLSIGHT uses a **hybrid geometric-acoustics pipeline** (Allen–Berkley ISM + AABB specular + UTD diffraction on the game side; Spherion HOA/HRTF + delay taps + Schroeder late bus on the audio side). This backlog maps 21 requested features to physically grounded models, cites standards and literature, and phases implementation so each step is testable at 20 Hz trace rate on wireframe FPS.
 
 **Design principle:** occlusion is **path-native** — no fake volume ducks. Energy partitions follow conservation at surfaces: absorption α, specular (1−α)(1−s), diffuse scatter (1−α)·s (ISO 17497-1 scattering coefficient s).
 
 **CPU budget (20 Hz trace, ~4 sources, small room):** ISM order-3 + AABB order-2 ≈ 200–400 path validations/frame; UTD edges ≈ 16–32; diffuse companion taps ≈ +30%; acceptable on main thread at 20 Hz (~2–5 ms). Spherion audio thread: 4 taps × 3-band split + head shadow ≈ +15% per object vs single LPF tap.
+
+---
+
+## Phase plans
+
+| Phase | Plan | Goal | Status |
+|-------|------|------|--------|
+| 1 | [wave_physics_phase1.plan.md](wave_physics_phase1.plan.md) | High-ROI wave physics (directional early field, directivity, spectral taps) | ✅ Complete |
+| 2 | [wave_physics_phase2.plan.md](wave_physics_phase2.plan.md) | Graded paths, dynamic room, doors, live RT60 | ⏳ In progress |
+| 3 | [wave_physics_phase3.plan.md](wave_physics_phase3.plan.md) | Portal graph, flutter echoes, audible diffraction | ⏳ Planned |
+| 4 | [wave_physics_phase4.plan.md](wave_physics_phase4.plan.md) | Heavy hybrid (IR, modes, BTM, late rays) | ⏳ Planned |
+| 5 | [wave_physics_phase5.plan.md](wave_physics_phase5.plan.md) | Scene polish, material library, QA | ⏳ Planned |
 
 ---
 
@@ -122,6 +138,8 @@ Real-time wireframe game: **full wave equation (FDTD/BEM) is infeasible**. Physi
 └─────────────────────────────────────────────────────────────┘
 ```
 
+**Ownership rule:** `nullsight_audio.py` is the **only** NULLSIGHT module that imports `spherion`. Spherion owns inverse-distance, ISO 9613 air, propagation delay, Doppler, HOA/HRTF, and obstruction one-pole LPF. NULLSIGHT `acoustics/` owns geometric LOS, materials, path combiner parameters, and throttled retrace.
+
 ---
 
 ## Feature matrix (21 items)
@@ -152,89 +170,18 @@ Real-time wireframe game: **full wave equation (FDTD/BEM) is infeasible**. Physi
 
 ---
 
-## Phased implementation
+## Spherion API roadmap (cross-phase)
 
-### Phase 1 — High-ROI wave physics (THIS SESSION)
-**Goal:** Audible directional early field, source beaming, spectral taps, scatter, Tier A on.
+| Phase | API | Status |
+|-------|-----|--------|
+| 1 | `set_reflection_taps_extended(gains, delays_s, lpfs_hz, azimuths_rad, elevations_rad, band_low, band_mid, band_high)` | ✅ Implemented |
+| 1 | `head_shadow_ild_db` on dry path when `enable_head_shadow=True` | ✅ Implemented |
+| 2 | `set_late_reverb_predelay_s` | ⏳ Planned |
+| 2 | `set_source_directivity(cos_power)` (optional engine-side) | ⏳ Planned |
+| 3 | `set_reflection_tap` / multi-tap early cluster | ⏳ Planned |
+| 4 | `set_zone_ir(path)` per room zone | ⏳ Planned |
 
-| File | Changes |
-|------|---------|
-| `acoustics/types.py` | `ReflectionTap` + arrival_dir, band_energy, is_diffuse; `AcousticSource` directivity |
-| `acoustics/directivity.py` | **NEW** — cardioid, horn, listener angles |
-| `acoustics/materials.py` | ISO 9613-1 full α(f); concrete variants; `_FORCE_CONCRETE=False` |
-| `acoustics/reflection.py` | Arrival vectors, diffuse taps, per-band energy |
-| `acoustics/tracer.py` | Source directivity on dry path |
-| `acoustics/system.py` | Smooth extended tap fields |
-| `nullsight_audio.py` | `set_reflection_taps_extended`, radio cardioid |
-| `settings.py` | Enable doppler + propagation delay defaults |
-| `spherion/*` | Tap azimuth, 3-band gains, head shadow on dry+taps |
-| `verify_acoustic_trace.py` | Tests for directivity, bands, scatter, materials |
-
-**Acceptance (how to hear):**
-- Stand beside radio: louder on-axis, duller behind cabinet (cardioid)
-- Face wall: first reflection from side (tap pans away from source)
-- Open door outdoors: HF rolloff at distance (ISO 9613)
-- Move fast: pitch shift (Doppler toggle)
-- Blocked path: delayed diffuse wash vs sharp specular ping
-
-### Phase 2 — Dynamic room & doors
-- Live Sabine/Eyring on door open (volume + surface area revision)
-- Double-leaf door transmission + MAM dip
-- Reverb predelay = first reflection delay
-- Occluder furniture local absorption
-- Material tags in level data
-
-### Phase 3 — Graph & flutter
-- Acoustic portal graph (room nodes, door edges)
-- Flutter echo detection (parallel walls → periodic tap train)
-- Structure-borne coupling hook API
-
-### Phase 4 — Heavy hybrid
-- Zone IR convolution (pre-baked or procedural)
-- Modal bank below f_schroeder
-- BTM edge diffraction upgrade
-- Stochastic late-ray energy → reverb_send
-
-### Phase 5 — Scene polish
-- Full material library
-- ODEON-style transition order tuning
-- Manual QA checklist in guide.md
-
----
-
-## Spherion API changes
-
-### Phase 1 (implemented)
-```python
-set_reflection_taps_extended(
-    entity_id,
-    gains, delays_s, lpfs_hz,
-    azimuths_rad, elevations_rad,
-    band_low, band_mid, band_high,
-)
-```
-- Backward compatible: `set_reflection_taps(g,d,l)` still works (az=0, bands=1)
-- Dry path: `head_shadow_ild_db` applied post-HOA when `enable_head_shadow=True` in config
-
-### Phase 2+
-- `set_source_directivity(cos_power)` — optional engine-side
-- `set_late_reverb_predelay_s`
-- `set_zone_ir(path)` per room zone
-
----
-
-## Per-feature acceptance tests
-
-| Feature | Automated test | Manual listen |
-|---------|----------------|---------------|
-| Propagation delay | Spherion unit | Clap at 50 m — late arrival |
-| Doppler | velocity set | Drive past beacon — sweep |
-| ISO 9613 | `test_iso9613_monotonic` | Outdoor HF dull at range |
-| Directional taps | `test_tap_arrival_azimuth` | Reflection pans correctly |
-| Directivity | `test_cardioid_gain` | Radio off-axis quieter |
-| Diffuse scatter | `test_diffuse_tap_energy` | Soft wash vs mirror ping |
-| Per-band | `test_band_energy_splits` | Brick wall dulls HF reflection |
-| Materials | `test_material_variants` | Metal vs concrete timbre |
+Backward compatible: `set_reflection_taps(g,d,l)` still works (az=0, bands=1).
 
 ---
 
@@ -251,7 +198,9 @@ set_reflection_taps_extended(
 9. Svensson et al. 1999 — BTM  
 10. Valve Steam Audio docs — Hybrid reverb  
 11. ODEON manual — ISM + ray radiosity hybrid  
-12. Bradley — Double-leaf STL / MAM resonance
+12. Bradley — Double-leaf STL / MAM resonance  
+
+Also see `spherion_guide.md` for Spherion integration patterns.
 
 ---
 
@@ -261,5 +210,7 @@ set_reflection_taps_extended(
 |-------|--------|---------|
 | Plan | ✅ Complete | 2026-07-08 |
 | Phase 1 | ✅ Complete | 2026-07-08 |
-| Phase 2 | ⏳ Planned | — |
-| Phase 3–5 | ⏳ Planned | — |
+| Phase 2 | ⏳ In progress | 2026-07-08 |
+| Phase 3 | ⏳ Planned | — |
+| Phase 4 | ⏳ Planned | — |
+| Phase 5 | ⏳ Planned | — |

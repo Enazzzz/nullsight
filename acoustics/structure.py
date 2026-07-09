@@ -1,8 +1,18 @@
 """Structure-borne coupling hook for future footstep / impact SFX.
 
-Airborne GA does not model floor/structure paths. This module exposes a stub
-API so gameplay can query a structure-borne gain/LPF along a floor material
-path without committing to a full SEA / FEA model yet.
+Airborne GA does not model floor/structure paths. This module exposes a callable
+stub API so gameplay can query a structure-borne gain/LPF/delay along a floor
+material path without committing to a full SEA / FEA model yet.
+
+Public API (Phase 3 interface — no full simulation required):
+- ``structure_borne_gain(src, lst, floor_material) -> (gain, lpf_hz)``
+- ``structure_borne_delay_s(src, lst) -> delay_s``
+- ``structure_borne_for_source(src, lst, *, floor_material, coupled) -> (gain, lpf, delay)``
+- ``airborne_vs_structure_hint(...)`` — diagnostic which path dominates
+
+``AcousticSystem`` / ``trace_acoustic_path`` already call
+``structure_borne_for_source`` and export fields on ``AcousticLink``; Spherion
+receives a dull LF tap via ``nullsight_audio._combined_early_taps``.
 """
 
 from __future__ import annotations

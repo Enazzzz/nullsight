@@ -183,11 +183,18 @@ def _build_engine_config(
 	return config
 
 
-def _apply_room_acoustics(engine: object, room: RoomData, audio: AudioSettings) -> None:
+def _apply_room_acoustics(
+	engine: object,
+	room: RoomData,
+	audio: AudioSettings,
+	*,
+	door_open_frac: float = 0.0,
+) -> tuple[float, float]:
 	"""Configure indoor vs outdoor air and late-reverb bus for the active room.
 
 	Indoor RT60 comes from Sabine/Eyring on room shell geometry + materials.
 	Modal resonators add standing-wave LF coloration below Schroeder.
+	Returns ``(rt60_s, wet_level)`` so callers can seed the live-RT60 cache.
 	"""
 	if _room_uses_outdoor_air(room) and audio.use_atmospheric_conditions:
 		engine.set_use_atmospheric_conditions(True)
@@ -203,13 +210,16 @@ def _apply_room_acoustics(engine: object, room: RoomData, audio: AudioSettings) 
 		room.name,
 		room.boundaries,
 		material_name=shell,
+		door_open_frac=door_open_frac,
 		occluders=room.occluders,
 		occluder_materials=room.occluder_materials,
 	)
+	wet = 0.0
 	setter = getattr(engine, "set_late_reverb", None)
 	if setter is not None:
 		if not zone.enabled:
 			setter(zone.rt60_s, 0.0)
+			wet = 0.0
 		else:
 			wet = max(wet_level_from_rt60(zone.rt60_s), 0.35 if zone.enabled else 0.0)
 			setter(zone.rt60_s, wet)
@@ -226,6 +236,7 @@ def _apply_room_acoustics(engine: object, room: RoomData, audio: AudioSettings) 
 			modal_setter(freqs, gains, qs)
 		else:
 			modal_setter([], [], [])
+	return zone.rt60_s if zone.enabled else 0.0, wet
 
 
 class NullsightAudio:
@@ -276,6 +287,9 @@ class NullsightAudio:
 		self._obstruction_gain: dict[int, float] = {}
 		# Latest smoothed links (direct + transmission + reflection metadata).
 		self._acoustic_links: dict[int, AcousticLink] = {}
+		# Last late-bus RT60 pushed from live door-coupled Sabine/Eyring.
+		self._last_live_rt60_s: float = -1.0
+		self._last_live_wet: float = -1.0
 
 		if audio_settings is not None:
 			enabled = audio_settings.enabled
@@ -316,7 +330,9 @@ class NullsightAudio:
 		self._world = spherion.AudioWorld(config=engine_config)
 		self._world.set_master_gain(master_gain)
 		self._sample_rate_hz = self._world.engine.sample_rate_hz
-		_apply_room_acoustics(self._world.engine, room, self._audio_settings)
+		rt60_s, wet = _apply_room_acoustics(self._world.engine, room, self._audio_settings)
+		self._last_live_rt60_s = rt60_s
+		self._last_live_wet = wet
 
 		for sound in _level_sounds(room):
 			path = asset_paths.get(sound.asset_key)
@@ -423,6 +439,8 @@ class NullsightAudio:
 		seen: set[int] = set()
 		# Late-bus predelay = min first-reflection delay across active links.
 		min_predelay = None
+		# Live Sabine/Eyring RT60 from any link (door-coupled zone).
+		live_rt60 = None
 		for source_id, link in links.items():
 			seen.add(source_id)
 			self._acoustic_links[source_id] = link
@@ -431,6 +449,9 @@ class NullsightAudio:
 			if link.reverb_predelay_s > 0.0:
 				if min_predelay is None or link.reverb_predelay_s < min_predelay:
 					min_predelay = link.reverb_predelay_s
+			if link.rt60_s > 0.0:
+				if live_rt60 is None or link.rt60_s > live_rt60:
+					live_rt60 = link.rt60_s
 			loop = self._loop_by_id(source_id)
 			if loop is None:
 				continue
@@ -460,6 +481,10 @@ class NullsightAudio:
 			if setter is not None:
 				setter(min(0.25, max(0.0, min_predelay)))
 
+		# Push live door-coupled RT60 onto the shared late bus when it changes.
+		if live_rt60 is not None:
+			self._push_live_rt60(live_rt60)
+
 		for source_id in list(self._obstruction_gain):
 			if source_id not in seen:
 				del self._obstruction_gain[source_id]
@@ -469,6 +494,8 @@ class NullsightAudio:
 		"""Reset obstruction multipliers, reflection taps, and open LPF."""
 		self._obstruction_gain.clear()
 		self._acoustic_links.clear()
+		self._last_live_rt60_s = -1.0
+		self._last_live_wet = -1.0
 		if self._world is None:
 			return
 		for loop in self._loops:
@@ -481,6 +508,11 @@ class NullsightAudio:
 	def acoustic_debug_lines(self) -> list[str]:
 		"""Return short HUD lines describing each source path mode."""
 		lines: list[str] = []
+		# Header: live RT60 / predelay so door-open retune is visible while tuning.
+		if self._last_live_rt60_s > 0.0:
+			lines.append(
+				f"RT60 {self._last_live_rt60_s:.2f}s  WET {self._last_live_wet:.2f}"
+			)
 		for loop in self._loops:
 			link = self._acoustic_links.get(loop.entity_id)
 			if link is None:
@@ -491,9 +523,26 @@ class NullsightAudio:
 				f"G{link.direct_gain:.2f}/{link.transmission_gain:.2f} "
 				f"D{link.diffraction_gain:.2f}@{link.diffraction_delay_s*1000:.0f}ms "
 				f"R{link.reflection_gain:.2f}x{len(link.reflection_taps)} "
-				f"V{link.reverb_send:.2f} T{link.rt60_s:.2f}"
+				f"V{link.reverb_send:.2f} PD{link.reverb_predelay_s*1000:.0f}ms"
 			)
-		return lines[:6]
+		return lines[:7]
+
+	def _push_live_rt60(self, rt60_s: float) -> None:
+		"""Update Spherion late-reverb RT60 when door-coupled Sabine/Eyring changes."""
+		if self._world is None:
+			return
+		wet = max(wet_level_from_rt60(rt60_s), 0.35)
+		# Skip tiny revisions to avoid thrashing the Schroeder bus every frame.
+		if (
+			abs(rt60_s - self._last_live_rt60_s) < 0.02
+			and abs(wet - self._last_live_wet) < 0.02
+		):
+			return
+		setter = getattr(self._world, "set_late_reverb", None)
+		if setter is not None:
+			setter(rt60_s, wet)
+			self._last_live_rt60_s = rt60_s
+			self._last_live_wet = wet
 
 	def _effective_obstruction(self, link: AcousticLink) -> tuple[float, float]:
 		"""Dry-path gain from direct + transmission only (never diffraction).
@@ -831,7 +880,9 @@ class NullsightAudio:
 		else:
 			self._loaded_hrtf_path = None
 
-		_apply_room_acoustics(self._world.engine, self._room, audio)
+		rt60_s, wet = _apply_room_acoustics(self._world.engine, self._room, audio)
+		self._last_live_rt60_s = rt60_s
+		self._last_live_wet = wet
 
 	def set_gameplay_sounds_active(self, active: bool) -> None:
 		"""Mute or restore in-level spatial loops (e.g. while on the main menu)."""
@@ -849,7 +900,11 @@ class NullsightAudio:
 		*,
 		dt: float = 0.0,
 	) -> None:
-		"""Move a spatial loop in world space (used for health drift FX)."""
+		"""Move a spatial loop in world space (used for health drift FX).
+
+		Estimates source velocity from successive positions and pushes it to
+		Spherion for Doppler when ``dt`` is positive.
+		"""
 		if self._world is None:
 			return
 		loop = self._loop_by_id(entity_id)
@@ -858,8 +913,11 @@ class NullsightAudio:
 			loop.vy = (y - loop.last_y) / dt
 			loop.vz = (z - loop.last_z) / dt
 			loop.last_x, loop.last_y, loop.last_z = x, y, z
+			self._set_source_velocity(entity_id, loop.vx, loop.vy, loop.vz)
 		elif loop is not None:
+			loop.vx = loop.vy = loop.vz = 0.0
 			loop.last_x, loop.last_y, loop.last_z = x, y, z
+			self._set_source_velocity(entity_id, 0.0, 0.0, 0.0)
 		self._world.set_position(entity_id, x, y, z)
 
 	def set_loop_gain(self, entity_id: int, gain: float) -> None:

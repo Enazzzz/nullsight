@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from acoustics.portals import door_open_fraction, door_portal_bleed
+from acoustics.portals import door_open_fraction, door_portal_bleed, door_transmission_for_angle
 from occlusion import Aabb, BoundaryPlane
 from room import RoomData
 
@@ -100,8 +100,25 @@ class AcousticScene:
 		return solids, materials
 
 	def portal_state(self, door: InteractableDoor | None) -> tuple[float, float]:
-		"""Return doorway portal bleed (gain, lpf) from door angle."""
+		"""Return doorway portal bleed (gain, lpf) from door angle.
+
+		Uses slit aperture when cracked; closed doors report 0 so panel MAM
+		(``metal_door`` occluder) owns the transmission path alone.
+		"""
 		return door_portal_bleed(door)
+
+	def door_transmission(self, door: InteractableDoor | None) -> tuple[float, float]:
+		"""Combined panel MAM + slit transmission for the current door angle."""
+		return door_transmission_for_angle(door)
+
+	def cracked_door_lpf_hz(self, door: InteractableDoor | None) -> float:
+		"""Cracked-door low-pass cutoff (Hz) from open angle.
+
+		Near-closed slits stay dull (~280 Hz); wider cracks raise the cutoff
+		toward ~6.5 kHz via the slit portal curve in ``portals.slit_portal_transmission``.
+		"""
+		_gain, lpf_hz = door_portal_bleed(door)
+		return lpf_hz
 
 	def door_open_frac(self, door: InteractableDoor | None) -> float:
 		"""Normalized door open fraction for dynamic RT60 / portal graph."""

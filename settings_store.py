@@ -50,6 +50,7 @@ def _audio_to_dict(audio: AudioSettings) -> dict:
 		"enable_hf_air_absorption": bool(audio.enable_hf_air_absorption),
 		"enable_doppler": bool(audio.enable_doppler),
 		"enable_propagation_delay": bool(audio.enable_propagation_delay),
+		"enable_head_shadow": bool(audio.enable_head_shadow),
 		"use_atmospheric_conditions": bool(audio.use_atmospheric_conditions),
 		"atmospheric_temperature_c": float(audio.atmospheric_temperature_c),
 		"atmospheric_relative_humidity_percent": float(audio.atmospheric_relative_humidity_percent),
@@ -126,6 +127,8 @@ def _audio_from_dict(data: dict | None) -> AudioSettings:
 		audio.enable_doppler = bool(data["enable_doppler"])
 	if "enable_propagation_delay" in data:
 		audio.enable_propagation_delay = bool(data["enable_propagation_delay"])
+	if "enable_head_shadow" in data:
+		audio.enable_head_shadow = bool(data["enable_head_shadow"])
 	if "use_atmospheric_conditions" in data:
 		audio.use_atmospheric_conditions = bool(data["use_atmospheric_conditions"])
 	if "atmospheric_temperature_c" in data:

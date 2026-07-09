@@ -98,11 +98,30 @@ def door_mam_resonance_hz() -> float:
 def door_portal_bleed(door: InteractableDoor | None) -> tuple[float, float]:
 	"""Return (portal_gain, portal_lpf_hz) from door open angle.
 
-	Closed → (0, low). Fully open → panel is removed from occluders so portal
-	gain is unused for LOS, but a mild bleed remains for transmission paths
-	that still clip the frame. Uses physical slit width from open fraction.
+	Closed → (0, low): airborne path is panel MAM only (see ``door_panel_transmission``).
+	Cracked → slit aperture gain (Kirchhoff) dominates over panel TL.
+	Fully open → panel removed from occluders; mild bleed remains for frame clips.
 	"""
 	frac = door_open_fraction(door)
 	if frac <= 1e-4:
 		return 0.0, _CRACK_LPF_MIN
 	return slit_portal_transmission(frac)
+
+
+def door_transmission_for_angle(
+	door: InteractableDoor | None,
+) -> tuple[float, float]:
+	"""Combined panel MAM + slit portal transmission for the current door angle.
+
+	Closed: double-leaf panel only. Cracked: max(panel, slit) so a narrow crack
+	bleeds more than solid-panel TL. Open: slit approaches full aperture.
+	"""
+	panel_g, panel_lpf = door_panel_transmission()
+	frac = door_open_fraction(door)
+	if frac <= 1e-4:
+		return panel_g, panel_lpf
+	slit_g, slit_lpf = slit_portal_transmission(frac)
+	# Slit leakage dominates once the crack is audible.
+	if slit_g >= panel_g:
+		return slit_g, max(panel_lpf, slit_lpf)
+	return panel_g, min(panel_lpf, slit_lpf)

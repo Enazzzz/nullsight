@@ -273,26 +273,41 @@ def double_leaf_stl_db(
 	*,
 	gap_m: float = _DEFAULT_DOOR_AIR_GAP_M,
 ) -> float:
-	"""Double-leaf STL with MAM transition (Bradley).
+	"""Double-leaf STL with MAM resonance dip (Bradley / ISO 10140).
 
-	f < f_msm: coupled single-leaf mass law on (ms1+ms2).
-	f ≥ f_msm: higher STL from decoupled leaves (+6 dB/oct-ish boost).
+	f ≪ f_msm: coupled single-leaf mass law on (ms1+ms2).
+	f ≈ f_msm: transmission peak — STL dips ~12 dB (mass-air-mass resonance).
+	f ≫ f_msm: decoupled leaves; STL rises faster than single-leaf (+6 dB/oct-ish).
 	"""
 	f = max(freq_hz, 20.0)
 	ms1 = max(surface_density_1, 0.5)
 	ms2 = max(surface_density_2, 0.5)
 	f_msm = mam_resonance_hz(ms1, ms2, gap_m=gap_m)
 	coupled = mass_law_stl_db(ms1 + ms2, f)
-	if f < f_msm:
-		return coupled
-	# Above resonance: each leaf contributes; add progressive decoupling boost.
+
+	# Lorentzian dip around f_msm — cavity resonance opens a transmission window.
+	# Narrow half-width keeps far-below frequencies near coupled mass law.
+	half_width = max(6.0, 0.18 * f_msm)
+	dip_shape = 1.0 / (1.0 + ((f - f_msm) / half_width) ** 2)
+	dip_db = 12.0 * dip_shape
+
+	# Decoupled leaf sum (valid well above f_msm).
 	leaf1 = mass_law_stl_db(ms1, f)
 	leaf2 = mass_law_stl_db(ms2, f)
-	# Incoherent sum of leaf TL plus cavity isolation rising with f/f_msm.
 	ratio = f / max(f_msm, 1.0)
 	boost = 6.0 * math.log10(max(ratio, 1.0))
 	decoupled = leaf1 + leaf2 + boost
-	return max(coupled, decoupled)
+
+	# Blend coupled → decoupled above resonance; keep coupled as the dip baseline
+	# so the MAM notch is measured against the sealed-panel curve (not leaf1+leaf2).
+	if f <= f_msm:
+		baseline = coupled
+	else:
+		# Fully decoupled by ~3·f_msm.
+		w = min(1.0, (ratio - 1.0) / 2.0)
+		baseline = coupled * (1.0 - w) + max(coupled, decoupled) * w
+
+	return max(0.0, baseline - dip_db)
 
 
 def transmission_coefficient(
