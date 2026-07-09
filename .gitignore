@@ -1,0 +1,89 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+dmypy.json
+.pyre/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# --- Secrets & local config (never commit) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Per-machine game settings (repo keeps defaults in code)
+userdata/
+
+# --- OS junk ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# --- Editors (workspace caches only; project rules stay tracked) ---
+.idea/
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# --- Manim / Animo render output (sources stay in repo) ---
+media/
+partial_movie_files/
+
+# --- Local logs & scratch ---
+*.log
+*.tmp
+*.temp
+.cache/
+
+# --- Native / CMake build trees (if you build Spherion beside this repo) ---
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json

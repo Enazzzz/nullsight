@@ -1,0 +1,60 @@
+{
+	"music": {
+		"file": "Non-Relations.mp3",
+		"start_seconds": 14.0,
+		"title_appear_seconds": 19.0
+	},
+	"scroll_speed_px_per_sec": 52.0,
+	"scroll_delay_seconds": 3.0,
+	"entries": [
+		{"type": "title", "text": "NULLSIGHT"},
+		{"type": "gap", "lines": 3},
+
+		{"type": "heading", "text": "CREATED BY"},
+		{"type": "name", "text": "Enazzzz"},
+		{"type": "gap", "lines": 2},
+
+		{"type": "heading", "text": "PROGRAMMING"},
+		{"type": "name", "text": "Enazzzz"},
+		{"type": "gap", "lines": 2},
+
+		{"type": "heading", "text": "ENGINEERING"},
+		{"type": "name", "text": "Hyperlite Rendering Engine"},
+		{"type": "name", "text": "Built by Enazzzz"},
+		{"type": "gap", "lines": 2},
+
+		{"type": "heading", "text": "AUDIO ENGINE"},
+		{"type": "name", "text": "Spherion"},
+		{"type": "name", "text": "Built by Enazzzz"},
+		{"type": "gap", "lines": 2},
+
+		{"type": "heading", "text": "STORY"},
+		{"type": "name", "text": "Enazzzz"},
+		{"type": "name", "text": "Otterbot10510"},
+		{"type": "gap", "lines": 2},
+
+		{"type": "heading", "text": "HUD ART"},
+		{"type": "name", "text": "3nviousD3vil"},
+		{"type": "gap", "lines": 2},
+
+		{"type": "heading", "text": "MUSIC"},
+		{"type": "name", "text": "Jan Jelinek"},
+		{"type": "name", "text": "Also known as Gramm"},
+		{"type": "gap", "lines": 3},
+
+		
+		{"type": "heading", "text": "PLAYTESTING"},
+		{"type": "name", "text": "My Family"},
+		{"type": "name", "text": "SpaceCattis1"},
+		{"type": "name", "text": "3nviousD3vil"},
+		{"type": "name", "text": "Otterbot10510"},
+		{"type": "gap", "lines": 2},
+
+		{"type": "heading", "text": "SPECIAL THANKS"},
+		{"type": "name", "text": "Harley - my lovely dog"},
+		{"type": "name", "text": "For being there through countless nights"},
+		{"type": "gap", "lines": 4},
+
+		{"type": "title", "text": "THANK YOU FOR PLAYING"}
+	]
+}
