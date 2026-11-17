@@ -7,7 +7,7 @@ from occlusion import Aabb
 from scan_occluders import ScannedFace, ScannedFaceIndex
 
 # Canonical identity for one world edge (endpoints + optional hull).
-SegmentKey = tuple[tuple[float, float, float], tuple[float, float, float], tuple | None]
+SegmentKey = tuple[tuple[int, int, int], tuple[int, int, int], tuple | None]
 
 
 def _hull_key(bounds: Aabb | None) -> tuple | None:

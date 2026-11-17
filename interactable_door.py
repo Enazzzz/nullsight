@@ -53,7 +53,7 @@ def _edge_near(a: Edge, b: Edge, epsilon: float) -> bool:
 
 
 class InteractableDoor:
-	"""A single hinged door on the east wall of the small room."""
+	"""A single hinged door on a constant-X wall (east or west)."""
 
 	def __init__(
 		self,
@@ -64,6 +64,7 @@ class InteractableDoor:
 		height: float,
 		floor_y: float = 0.0,
 		swing_sign: float = 1.0,
+		room_side_x: float = -1.0,
 	) -> None:
 		self.wall_x = wall_x
 		self.hinge_z = hinge_z
@@ -71,6 +72,8 @@ class InteractableDoor:
 		self.height = height
 		self.floor_y = floor_y
 		self.swing_sign = swing_sign
+		# +1 when the room lies on +X of the wall (west-wall door); -1 for east-wall.
+		self.room_side_x = 1.0 if room_side_x >= 0.0 else -1.0
 		self.hinge: Vec3 = (wall_x, floor_y, hinge_z)
 		self.open_angle = 0.0
 		self._target_angle = 0.0
@@ -79,7 +82,7 @@ class InteractableDoor:
 		self._tracked_panel_segments: list[ScannedSegment] = []
 		self._closed_panel_hull_key: tuple | None = None
 		self.interact_point: Vec3 = (
-			wall_x - 0.35,
+			wall_x + self.room_side_x * 0.35,
 			floor_y + height * 0.45,
 			hinge_z + width * 0.5,
 		)
@@ -104,6 +107,29 @@ class InteractableDoor:
 			height=height,
 			floor_y=floor_y,
 			swing_sign=1.0,
+			room_side_x=-1.0,
+		)
+
+	@classmethod
+	def west_wall(
+		cls,
+		*,
+		z_center: float,
+		width: float = 1.0,
+		height: float = 2.15,
+		floor_y: float = 0.0,
+		wall_x: float = 0.04,
+	) -> InteractableDoor:
+		"""Door on the west wall, swinging inward (+X into the room)."""
+		hinge_z = z_center - width * 0.5
+		return cls(
+			wall_x=wall_x,
+			hinge_z=hinge_z,
+			width=width,
+			height=height,
+			floor_y=floor_y,
+			swing_sign=-1.0,
+			room_side_x=1.0,
 		)
 
 	def _build_frame_edges(self) -> list[Edge]:
@@ -146,11 +172,11 @@ class InteractableDoor:
 			(hinge_bottom, outer_bottom),
 			(hinge_top, outer_top),
 		]
-		# Thin depth lines on the panel face.
-		normal_offset = (-thick, 0.0, 0.0)
+		# Thin depth lines on the panel face (into the room).
+		nx = self.room_side_x * thick
 		for start, end in list(edges):
-			s2 = (start[0] + normal_offset[0], start[1], start[2])
-			e2 = (end[0] + normal_offset[0], end[1], end[2])
+			s2 = (start[0] + nx, start[1], start[2])
+			e2 = (end[0] + nx, end[1], end[2])
 			edges.append((start, s2))
 			edges.append((end, e2))
 			edges.append((s2, e2))
@@ -166,11 +192,16 @@ class InteractableDoor:
 		xs = [point[0] for point in rotated]
 		zs = [point[2] for point in rotated]
 		z_pad = 0.04
-		# West face sits one panel thickness behind the visible wireframe so scan
-		# registers a solid face on the same plane as the drawn edges.
+		# Panel thickness extends into the room so scan registers a solid face.
+		if self.room_side_x < 0.0:
+			x0 = min(xs) - _PANEL_THICKNESS
+			x1 = max(xs)
+		else:
+			x0 = min(xs)
+			x1 = max(xs) + _PANEL_THICKNESS
 		return (
-			(min(xs) - _PANEL_THICKNESS, self.floor_y, min(zs) - z_pad),
-			(max(xs), self.floor_y + self.height, max(zs) + z_pad),
+			(x0, self.floor_y, min(zs) - z_pad),
+			(x1, self.floor_y + self.height, max(zs) + z_pad),
 		)
 
 	def _closed_panel_occluder_bounds(self) -> Aabb | None:

@@ -153,56 +153,80 @@ class ScanDevice:
 		self._scan_perf = resolve_scan_perf(settings, camera_speed_sq=self._camera_speed_sq)
 
 	def begin_render_frame(self) -> None:
-		"""Cache per-frame timing values used heavily during draw."""
+		"""Cache per-frame timing values used heavily during draw.
+
+		Wave-complete segments skip the sphere clip and keep a sticky state;
+		only ``uniform_bright`` is refreshed (cheap elapsed compare).
+		"""
 		self._live_occlusion_frame += 1
 		self._frame_wave_complete = self.max_radius / self.wave_speed
 		self._fade_cache.clear()
 		wave_done = self._frame_wave_complete
-		states: dict[int, SegmentRenderState] = {}
+		hold = self.hold_duration
+		states: dict[int, SegmentRenderState] = self._render_states
 		for segment in self._memory.segments:
+			seg_id = id(segment)
+			# Sticky fast path: most segments are past the wave during hold/fade.
+			if segment.wave_complete:
+				prev = states.get(seg_id)
+				bright = self.elapsed(segment.start_time) < hold
+				if (
+					prev is not None
+					and prev.wave_complete
+					and prev.uniform_bright == bright
+				):
+					continue
+				states[seg_id] = SegmentRenderState(
+					uniform_bright=bright,
+					wave_radius=0.0,
+					wave_complete=True,
+					reveal_origin=segment.reveal_origin,
+					wave_interval=(0.0, 1.0),
+					outside_wave=False,
+					wave_covers_full=True,
+				)
+				continue
+
 			elapsed = self.elapsed(segment.start_time)
 			reveal_origin = segment.reveal_origin
-			if not segment.wave_complete:
-				uniform = elapsed < wave_done + self.hold_duration
-				wave_radius = elapsed * self.wave_speed
-				wave_interval = clip_segment_to_sphere_interval(
-					segment.start,
-					segment.end,
-					reveal_origin,
-					wave_radius,
-				)
-				outside_wave = wave_interval is None
-				wave_covers_full = wave_interval is not None and _interval_covers_segment(wave_interval)
-			else:
-				uniform = elapsed < self.hold_duration
-				wave_radius = 0.0
-				wave_interval = (0.0, 1.0)
-				outside_wave = False
-				wave_covers_full = True
-			states[id(segment)] = SegmentRenderState(
+			uniform = elapsed < wave_done + hold
+			wave_radius = elapsed * self.wave_speed
+			wave_interval = clip_segment_to_sphere_interval(
+				segment.start,
+				segment.end,
+				reveal_origin,
+				wave_radius,
+			)
+			outside_wave = wave_interval is None
+			wave_covers_full = wave_interval is not None and _interval_covers_segment(wave_interval)
+			states[seg_id] = SegmentRenderState(
 				uniform_bright=uniform,
 				wave_radius=wave_radius,
-				wave_complete=segment.wave_complete,
+				wave_complete=False,
 				reveal_origin=reveal_origin,
 				wave_interval=wave_interval,
 				outside_wave=outside_wave,
 				wave_covers_full=wave_covers_full,
 			)
-			if not segment.wave_complete and wave_covers_full:
+			if wave_covers_full:
 				segment.wave_complete = True
 				self._refresh_segment_expire_time(segment)
-		self._render_states = states
 
 	def segment_render_state(self, segment: ScannedSegment) -> SegmentRenderState:
 		"""Return cached draw timing for a segment during the current render frame."""
 		return self._render_states[id(segment)]
 
 	def _live_segment_cache_valid(self, eye: Vec3, cached_eye: Vec3) -> bool:
-		"""Return True when a per-segment occlusion result is still fresh enough."""
+		"""Return True when a per-segment occlusion result is still fresh enough.
+
+		Only horizontal (XZ) travel invalidates. Elevation changes (stairs, jumps,
+		falling into a bay) used to wipe the whole cache every riser because the
+		old isotropic 3D test treated a 0.3 m step like a large move. Vertical
+		refresh still happens on live-occlusion stride frames while moving.
+		"""
 		dx = eye[0] - cached_eye[0]
-		dy = eye[1] - cached_eye[1]
 		dz = eye[2] - cached_eye[2]
-		return dx * dx + dy * dy + dz * dz <= self._scan_perf.live_cache_dist_sq
+		return dx * dx + dz * dz <= self._scan_perf.live_cache_dist_sq
 
 	def prepare_segment_draws(
 		self,
@@ -237,6 +261,13 @@ class ScanDevice:
 				if cached_entry is not None:
 					cached_intervals, cached_eye = cached_entry
 					if self._live_segment_cache_valid(eye, cached_eye):
+						intervals = cached_intervals
+						reuse_live = True
+					elif (
+						scan_perf.live_occlusion_stride > 1
+						and self._live_occlusion_frame % scan_perf.live_occlusion_stride != 0
+					):
+						# Throttle: keep last occlusion result on non-stride frames.
 						intervals = cached_intervals
 						reuse_live = True
 				if not reuse_live:
@@ -628,6 +659,11 @@ class ScanDevice:
 		self._memory.segment_index = index
 		if before != len(kept):
 			self._clear_live_draw_cache()
+			# Drop sticky render-state entries for pruned segment ids.
+			alive = {id(segment) for segment in kept}
+			stale = [seg_id for seg_id in self._render_states if seg_id not in alive]
+			for seg_id in stale:
+				del self._render_states[seg_id]
 		if before != len(kept) and self._boundaries is not None:
 			if kept:
 				self._rebuild_scanned_faces(self._boundaries)

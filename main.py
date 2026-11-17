@@ -18,7 +18,8 @@ from renderer import draw_wireframe_scene
 from gameplay_hud import draw_gameplay_hud
 from health_audio_fx import HealthAudioFx
 from interactable_door import InteractableDoor
-from levels import load_world
+from interactable_door import InteractableDoor
+from levels import load_room_file, load_world
 from nullsight_audio import NullsightAudio
 from player_collision import resolve_spawn_position
 from player_vitals import PlayerVitals
@@ -45,6 +46,12 @@ def _parse_args() -> argparse.Namespace:
 		action="store_true",
 		help="Disable Spherion spatial audio even when enabled in settings",
 	)
+	parser.add_argument(
+		"--playtest",
+		metavar="ROOM_JSON",
+		default="",
+		help="Skip title screen and load this Facility room JSON immediately",
+	)
 	return parser.parse_args()
 
 
@@ -63,7 +70,15 @@ def _return_to_title_screen(
 ) -> ScanDevice:
 	"""Reset gameplay state and show the title screen with menu music."""
 	pause_menu.close(engine)
-	camera.position = resolve_spawn_position(room.spawn, room.collidables, room.bounds)
+	camera.position = resolve_spawn_position(
+		room.spawn,
+		room.collidables,
+		room.bounds,
+		base_floor_y=room.floor_y,
+		walkables=room.walkables,
+	)
+	camera.velocity_y = 0.0
+	camera.grounded = True
 	camera.yaw = 0.0
 	camera.pitch = 0.0
 	vitals.reset()
@@ -112,7 +127,12 @@ def _scan_occlusion_payload(
 def run() -> None:
 	"""Main loop: blind exploration with outward-propagating scan pulses."""
 	args = _parse_args()
-	room, door = load_world()
+	if args.playtest:
+		room, door = load_room_file(args.playtest)
+		if door is None:
+			door = InteractableDoor.west_wall(z_center=1.0, width=1.0, height=2.0, floor_y=room.floor_y)
+	else:
+		room, door = load_world()
 
 	settings = load_settings()
 	engine = hyperlite.Engine(INITIAL_WIDTH, INITIAL_HEIGHT, "cpu", WINDOW_TITLE)
@@ -125,7 +145,17 @@ def run() -> None:
 	boundaries = room.boundaries
 	collidables = room.collidables
 
-	camera = Camera(position=resolve_spawn_position(room.spawn, collidables, room.bounds), yaw=0.0, pitch=0.0)
+	camera = Camera(
+		position=resolve_spawn_position(
+			room.spawn,
+			collidables,
+			room.bounds,
+			base_floor_y=room.floor_y,
+			walkables=room.walkables,
+		),
+		yaw=0.0,
+		pitch=0.0,
+	)
 	scan = ScanDevice()
 	vitals = PlayerVitals()
 	health_fx = HealthAudioFx()
@@ -149,7 +179,13 @@ def run() -> None:
 	elif audio.active:
 		print("NULLSIGHT audio: Spherion active (headphones recommended)")
 
-	audio.on_main_menu_show()
+	if args.playtest:
+		# Jump straight into gameplay — editor playtest path.
+		main_menu.dismiss(engine)
+		engine.set_mouse_captured(True)
+		audio.on_main_menu_hide()
+	else:
+		audio.on_main_menu_show()
 	enable_precise_sleep()
 	game_paused = False
 
@@ -198,7 +234,15 @@ def run() -> None:
 						scanner_repair.reset(audio)
 						door.reset()
 						acoustic_system.notify_level_loaded(room)
-						camera.position = resolve_spawn_position(room.spawn, collidables, room.bounds)
+						camera.position = resolve_spawn_position(
+							room.spawn,
+							collidables,
+							room.bounds,
+							base_floor_y=room.floor_y,
+							walkables=room.walkables,
+						)
+						camera.velocity_y = 0.0
+						camera.grounded = True
 						camera.yaw = 0.0
 						camera.pitch = 0.0
 						scan = ScanDevice()
@@ -289,6 +333,10 @@ def run() -> None:
 					_game_collidables(room, door),
 					room.bounds,
 					speed_multiplier=vitals.sprint_speed_multiplier(sprinting=sprinting),
+					jump_pressed=input_state.jump_pressed,
+					base_floor_y=room.floor_y,
+					ceiling_y=room.ceiling_y,
+					walkables=room.walkables,
 				)
 				eye = camera.eye_position()
 				dx = eye[0] - prev_eye[0]

@@ -15,8 +15,8 @@ from room import RoomData
 if TYPE_CHECKING:
 	from interactable_door import InteractableDoor
 
-# Retrace interval (~20 Hz).
-_TRACE_INTERVAL_SEC = 0.05
+# Retrace interval (~10 Hz) — enough for radio obstruction without frame spikes.
+_TRACE_INTERVAL_SEC = 0.10
 # Exponential smoothing time constant (seconds).
 _SMOOTH_TAU_SEC = 0.12
 

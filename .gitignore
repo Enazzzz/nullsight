@@ -82,6 +82,9 @@ partial_movie_files/
 *.temp
 .cache/
 
+# Brainstorm visual companion sessions
+.superpowers/
+
 # --- Native / CMake build trees (if you build Spherion beside this repo) ---
 cmake-build-*/
 CMakeFiles/

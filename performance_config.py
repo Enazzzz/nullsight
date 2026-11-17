@@ -27,6 +27,7 @@ class ScanPerf:
 	"""Resolved per-frame scan/occlusion knobs."""
 
 	live_occlusion_stride: int
+	# Horizontal (XZ) eye travel before live occlusion is recomputed.
 	live_cache_dist_sq: float
 	skip_screen_clip_while_moving: bool
 
@@ -66,13 +67,14 @@ def resolve_scan_perf(settings: GameSettings, *, camera_speed_sq: float) -> Scan
 		stride = 1
 
 	if perf.wide_occlusion_cache and moving:
-		cache_dist_sq = 0.0144
+		# ~35 cm horizontal — strafe without full recompute.
+		cache_dist_sq = 0.1225
 	elif perf.wide_occlusion_cache:
-		cache_dist_sq = 0.01
+		cache_dist_sq = 0.04
 	else:
 		cache_dist_sq = 0.0036
 
-	skip_screen = perf.skip_screen_clip_moving and moving
+	skip_screen = moving and (perf.skip_screen_clip_moving or perf.throttle_live_occlusion)
 
 	return ScanPerf(
 		live_occlusion_stride=stride,

@@ -40,9 +40,16 @@ def length(v: Vec3) -> float:
 	return math.sqrt(length_sq(v))
 
 
-def vertex_key(point: Vec3) -> tuple[float, float, float]:
-	"""Quantize a world position so shared endpoints reuse one cache entry."""
-	return (round(point[0], 4), round(point[1], 4), round(point[2], 4))
+def vertex_key(point: Vec3) -> tuple[int, int, int]:
+	"""Quantize a world position so shared endpoints reuse one cache entry.
+
+	Integer scaling avoids ``round()`` — that showed up hot in render profiles.
+	"""
+	return (
+		int(point[0] * 10000.0 + (0.5 if point[0] >= 0.0 else -0.5)),
+		int(point[1] * 10000.0 + (0.5 if point[1] >= 0.0 else -0.5)),
+		int(point[2] * 10000.0 + (0.5 if point[2] >= 0.0 else -0.5)),
+	)
 
 
 def intersect_intervals(a: Interval, b: Interval) -> Interval | None:

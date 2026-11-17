@@ -1,7 +1,16 @@
 """Level layouts built with ``LevelBuilder``."""
 
+from pathlib import Path
+
 from math3d import Vec3
-from level_builder import LevelBuilder, SMALL_TABLE_BOUNDS, SMALL_TABLE_RADIO_POS
+from level_builder import (
+	AWAKENING_RADIO_POS,
+	AWAKENING_RADIO_SHELF_TOP,
+	LevelBuilder,
+	SMALL_TABLE_BOUNDS,
+	SMALL_TABLE_RADIO_POS,
+)
+from level_format import LevelDocument, default_levels_dir
 from interactable_door import InteractableDoor
 from room import Edge, OccluderHull, RoomData
 from occlusion import Aabb, BoundaryPlane
@@ -10,7 +19,6 @@ from occlusion import Aabb, BoundaryPlane
 _SMALL_DOOR_Z0 = 2.5
 _SMALL_DOOR_Z1 = 3.5
 _SMALL_DOOR_HEIGHT = 2.15
-
 
 def build_small_level() -> tuple[RoomData, InteractableDoor]:
 	"""12×12 entry room plus 12×12 east annex, linked by a hinged door.
@@ -136,18 +144,190 @@ def build_large_level() -> RoomData:
 	return builder.build()
 
 
+# Awakening / First room — main deck at y=0; sunken bay is a hole with stairs.
+_AWK_WIDTH = 14.0
+_AWK_DEPTH = 12.0
+_AWK_PIT_Y = -1.2
+_AWK_DECK_Y = 0.0
+_AWK_CEILING = 3.6
+_AWK_PIT_X0, _AWK_PIT_X1 = 8.0, 13.5
+_AWK_PIT_Z0, _AWK_PIT_Z1 = 0.5, 4.0
+_AWK_DOOR_Z0, _AWK_DOOR_Z1 = 8.5, 9.5
+_AWK_DOOR_HEIGHT = 2.15
+_AWK_DECK_THICK = 0.12
+_AWK_PIT_WALL = 0.12
+
+
+def _awakening_floors(builder: LevelBuilder) -> None:
+	"""Deck plates around the bay, pit floor, stairs, rim walls, and floor grids."""
+	deck = _AWK_DECK_Y
+	pit_y = _AWK_PIT_Y
+	thick = _AWK_DECK_THICK
+	w, d = _AWK_WIDTH, _AWK_DEPTH
+	x0, x1 = _AWK_PIT_X0, _AWK_PIT_X1
+	z0, z1 = _AWK_PIT_Z0, _AWK_PIT_Z1
+
+	# Main deck plates (walkable; no scan occluders — grids supply lines).
+	builder.walkable_plate(0.0, 0.0, x0, d, top_y=deck, thickness=thick)
+	builder.walkable_plate(x1, 0.0, w, d, top_y=deck, thickness=thick)
+	builder.walkable_plate(x0, z1, x1, d, top_y=deck, thickness=thick)
+	builder.walkable_plate(x0, 0.0, x1, z0, top_y=deck, thickness=thick)
+	# Pit floor.
+	builder.walkable_plate(x0, z0, x1, z1, top_y=pit_y, thickness=0.08)
+
+	# Stairs: walkable tops + top-face wire only (full boxes densify into lag).
+	steps = (
+		(-0.9, 3.10, 3.50),
+		(-0.6, 3.50, 3.90),
+		(-0.3, 3.90, 4.30),
+	)
+	step_thick = 0.14
+	for top_y, z_lo, z_hi in steps:
+		builder.box(
+			x0, top_y - step_thick, z_lo, x1, top_y, z_hi,
+			walkable=True, occludes=False, collidable=False, material="concrete",
+		)
+		# Top rectangle only — enough to read the tread in a scan.
+		builder.environment_box(x0, top_y, z_lo, x1, top_y, z_hi)
+
+	# Rim walls — collision only (under the deck lip; no scan occluders).
+	rw = _AWK_PIT_WALL
+	builder.box(
+		x0 - rw, pit_y, z0, x0, deck, z1,
+		occludes=False, collidable=True, material="concrete",
+	)
+	builder.box(
+		x1, pit_y, z0, x1 + rw, deck, z1,
+		occludes=False, collidable=True, material="concrete",
+	)
+	builder.box(
+		x0, pit_y, z0 - rw, x1, deck, z0,
+		occludes=False, collidable=True, material="concrete",
+	)
+	# Thin visible rim outline so the hole edge reads in scans.
+	builder.environment_box(x0, deck, z0, x0 + 0.02, deck, z1)
+	builder.environment_box(x1 - 0.02, deck, z0, x1, deck, z1)
+	builder.environment_box(x0, deck, z0, x1, deck, z0 + 0.02)
+
+	# Scanable floor grids (undensified — densify explodes scan bake cost).
+	builder.floor_grid(deck, 0.0, 0.0, x0, d)
+	builder.floor_grid(deck, x1, 0.0, w, d)
+	builder.floor_grid(deck, x0, z1, x1, d)
+	builder.floor_grid(deck, x0, 0.0, x1, z0)
+	builder.floor_grid(pit_y, x0, z0, x1, z1)
+
+
+def build_awakening_room() -> tuple[RoomData, InteractableDoor]:
+	"""Threshold / Wake — first room from the whiteboard (real stairs + bay).
+
+	Top of the board = +Z. West wall door, north-wall window, center-left pillar,
+	radio on the west wall, tipped furniture mid-right, spawn in the SE sunken bay.
+	Shell is the main deck; the bay is a hole with its own walkable floor.
+	"""
+	door = InteractableDoor.west_wall(
+		z_center=(_AWK_DOOR_Z0 + _AWK_DOOR_Z1) * 0.5,
+		width=_AWK_DOOR_Z1 - _AWK_DOOR_Z0,
+		height=_AWK_DOOR_HEIGHT,
+		floor_y=_AWK_DECK_Y,
+	)
+	builder = (
+		LevelBuilder(
+			_AWK_WIDTH,
+			_AWK_DEPTH,
+			floor_y=_AWK_DECK_Y,
+			ceiling_y=_AWK_CEILING,
+			# 1 keeps wall/ceiling grids readable without densify cost.
+			edge_subdivisions=1,
+		)
+		.name("awakening")
+		.shell_material("concrete")
+		.gravity_floor(_AWK_PIT_Y)
+		.spawn_at(10.5, 2.0, y=_AWK_PIT_Y)
+		.outer_shell(floor=False)
+	)
+	_awakening_floors(builder)
+	# West-wall doorway lintel / jambs.
+	builder.divider_wall_x(0.0, 0.0, _AWK_DOOR_Z0, y0=_AWK_DECK_Y, material="concrete")
+	builder.divider_wall_x(0.0, _AWK_DOOR_Z1, _AWK_DEPTH, y0=_AWK_DECK_Y, material="concrete")
+	builder.divider_wall_x(
+		0.0, _AWK_DOOR_Z0, _AWK_DOOR_Z1,
+		y0=_AWK_DOOR_HEIGHT, y1=_AWK_CEILING, material="concrete",
+	)
+	# North-wall window to hallway (see-through glass band).
+	builder.box(
+		5.0, 1.15, _AWK_DEPTH - 0.12,
+		8.5, 2.45, _AWK_DEPTH - 0.02,
+		see_through=True, material="glass",
+	)
+	# Center-left structural pillar.
+	builder.box(4.0, _AWK_DECK_Y, 5.2, 5.0, _AWK_CEILING, 6.2, material="concrete")
+	# West-wall radio shelf + radio (below the door).
+	# Audio spawn is body center; geometry sits on the shelf top.
+	rx, _ry, rz = AWAKENING_RADIO_POS
+	shelf_top = AWAKENING_RADIO_SHELF_TOP
+	builder.box(0.15, shelf_top - 0.10, rz - 0.35, 1.15, shelf_top, rz + 0.35, material="wood")
+	builder.table_radio(rx, shelf_top, rz, wall_x=0.0)
+	# North-side upright table (was a solid metal box).
+	builder.table(10.5, 8.5, 12.2, 10.2, top_y=0.75, material="wood")
+	# NE alcove notch.
+	builder.wall_x(12.0, 10.0, _AWK_DEPTH, material="concrete")
+	builder.wall_z(10.0, 12.0, _AWK_WIDTH, material="concrete")
+	builder.decor_edges(door.frame_edges, occludes=True, material="metal_door")
+	return builder.build(), door
+
 def load_world() -> tuple[RoomData, InteractableDoor]:
-	"""Load the single contiguous world used at game start."""
-	return build_small_level()
+	"""Load the contiguous world used at game start.
+
+	Prefers ``Facility/rooms/<start>.json``, then legacy ``levels/awakening.json``,
+	then the hand-authored Python builder.
+	"""
+	from facility_io import FacilityDocument, ensure_facility_dirs, migrate_legacy_awakening
+
+	ensure_facility_dirs()
+	migrate_legacy_awakening()
+	try:
+		facility = FacilityDocument.load()
+		room_doc = facility.load_start_room()
+		room, door = room_doc.build()
+		if door is None:
+			raise RuntimeError(f"{room_doc.room_id} is missing a door block")
+		return room, door
+	except FileNotFoundError:
+		pass
+
+	json_path = default_levels_dir() / "awakening.json"
+	if json_path.is_file():
+		room, door = LevelDocument.load(json_path).build()
+		if door is None:
+			raise RuntimeError(f"{json_path} is missing a door block")
+		return room, door
+	return build_awakening_room()
 
 
 def load_level(name: str) -> RoomData:
 	"""Load a named layout (dev/bench only — not exposed to players)."""
+	from facility_io import RoomDocument, rooms_dir
+
+	facility_path = rooms_dir() / f"{name}.json"
+	if facility_path.is_file():
+		return RoomDocument.load(facility_path).build()[0]
+	json_path = default_levels_dir() / f"{name}.json"
+	if json_path.is_file():
+		return LevelDocument.load(json_path).build()[0]
 	if name == "large":
 		return build_large_level()
+	if name == "awakening":
+		return build_awakening_room()[0]
 	if name in ("small", "test", "default"):
 		return build_small_level_room()
-	raise ValueError(f"Unknown level: {name!r}. Use 'small' or 'large'.")
+	raise ValueError(f"Unknown level: {name!r}. Use 'awakening', 'small', or 'large'.")
+
+
+def load_room_file(path: str | Path) -> tuple[RoomData, InteractableDoor | None]:
+	"""Load a Facility room JSON by path (playtest / editor)."""
+	from facility_io import RoomDocument
+
+	return RoomDocument.load(Path(path)).build()
 
 
 def build_test_room() -> tuple[
@@ -158,7 +338,7 @@ def build_test_room() -> tuple[
 	list[BoundaryPlane],
 ]:
 	"""Legacy tuple return for older call sites."""
-	room = build_small_level_room()
+	room = build_awakening_room()[0]
 	return (
 		room.environment_edges,
 		room.occluder_hulls,
@@ -169,8 +349,8 @@ def build_test_room() -> tuple[
 
 
 def default_spawn() -> Vec3:
-	"""Player start in the small room."""
-	return 6.0, 0.0, 6.0
+	"""Player start in the Awakening Room sunken bay."""
+	return 10.5, _AWK_PIT_Y, 2.0
 
 
 def count_edges(room: RoomData) -> int:

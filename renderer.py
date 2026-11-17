@@ -55,8 +55,8 @@ class ProjectedVertexCache:
 		self._focal = (height * 0.5) / math.tan(fov_y * 0.5)
 		self._tan_v = math.tan(fov_y * 0.5)
 		self._tan_h = self._tan_v * (width / height) if height > 0 else self._tan_v
-		self._screen: dict[tuple[float, float, float], tuple[int, int] | None] = {}
-		self._camera: dict[tuple[float, float, float], Vec3] = {}
+		self._screen: dict[tuple[int, int, int], tuple[int, int] | None] = {}
+		self._camera: dict[tuple[int, int, int], Vec3] = {}
 		self._eye = camera.eye_position()
 		self._cos_yaw = math.cos(camera.yaw)
 		self._sin_yaw = math.sin(camera.yaw)

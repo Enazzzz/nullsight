@@ -16,6 +16,7 @@ class InputState:
 	look_dx: float = 0.0
 	look_dy: float = 0.0
 	scan_pressed: bool = False
+	jump_pressed: bool = False
 	sprint_held: bool = False
 	pause_pressed: bool = False
 	interact_pressed: bool = False
@@ -23,6 +24,7 @@ class InputState:
 	_prev_f11_down: bool = field(default=False, repr=False)
 	_prev_escape_down: bool = field(default=False, repr=False)
 	_prev_scan_down: bool = field(default=False, repr=False)
+	_prev_jump_down: bool = field(default=False, repr=False)
 	_prev_e_down: bool = field(default=False, repr=False)
 	_prev_right_down: bool = field(default=False, repr=False)
 
@@ -33,6 +35,7 @@ class InputState:
 		self.look_dx = 0.0
 		self.look_dy = 0.0
 		self.scan_pressed = False
+		self.jump_pressed = False
 		self.sprint_held = False
 		self.pause_pressed = False
 		self.interact_pressed = False
@@ -71,13 +74,16 @@ class InputState:
 			if engine.key_down(keys.DOWN):
 				self.look_dy += 1.0
 
-		if engine.key_down(keys.SPACE) or engine.key_down(keys.TAB):
-			scan_down = True
-		else:
-			scan_down = False
+		# Tab = scan pulse; Space = jump (edge-triggered).
+		scan_down = engine.key_down(keys.TAB)
 		if scan_down and not self._prev_scan_down:
 			self.scan_pressed = True
 		self._prev_scan_down = scan_down
+
+		jump_down = engine.key_down(keys.SPACE)
+		if jump_down and not self._prev_jump_down:
+			self.jump_pressed = True
+		self._prev_jump_down = jump_down
 
 		e_down = engine.key_down(keys.E)
 		right_down = engine.mouse_button_down(hyperlite.MouseButtons.Right)

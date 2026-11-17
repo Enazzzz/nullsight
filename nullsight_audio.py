@@ -23,7 +23,7 @@ from audio_assets import (
 	resolve_hrtf_path,
 )
 from camera import Camera
-from level_builder import SMALL_TABLE_RADIO_POS
+from level_builder import AWAKENING_RADIO_POS, SMALL_TABLE_RADIO_POS
 from room import RoomData
 from settings import AudioSettings
 
@@ -113,7 +113,39 @@ def _authored_speaker(asset_key: str) -> tuple[str, tuple[float, float, float], 
 
 
 def _level_sounds(room: RoomData) -> list[LevelSound]:
-	"""Return default probe loops for the active level layout."""
+	"""Return spatial loops for the active room.
+
+	Facility room JSON ``authored_sounds`` wins when present; otherwise fall
+	back to the hard-coded probe layouts by room name.
+	"""
+	authored = getattr(room, "authored_sounds", None) or []
+	if authored:
+		sounds: list[LevelSound] = []
+		for entry in authored:
+			asset = str(entry.get("asset_key", "hum"))
+			pos = entry.get("position") or [0.0, 1.0, 0.0]
+			prop = entry.get("propagation") or {}
+			pat, axis, radius = _authored_speaker(asset)
+			if "directivity" in prop:
+				pat = str(prop["directivity"])
+			if "axis" in prop:
+				raw_axis = prop["axis"]
+				axis = (float(raw_axis[0]), float(raw_axis[1]), float(raw_axis[2]))
+			sounds.append(
+				LevelSound(
+					asset,
+					float(pos[0]),
+					float(pos[1]),
+					float(pos[2]),
+					gain=float(entry.get("volume", entry.get("gain", 0.25))),
+					loop=bool(entry.get("loop", True)),
+					directivity=pat,
+					directivity_axis=axis,
+					speaker_radius_m=radius,
+				)
+			)
+		return sounds
+
 	if room.name == "large":
 		center_x = (room.bounds[0] + room.bounds[1]) * 0.5
 		center_z = (room.bounds[2] + room.bounds[3]) * 0.5
@@ -139,9 +171,15 @@ def _level_sounds(room: RoomData) -> list[LevelSound]:
 			),
 		]
 
-	# small / default room — radio on the low table only.
-	radio_x, radio_y, radio_z = SMALL_TABLE_RADIO_POS
+	# Awakening / small rooms — one old radio at the authored shelf position.
+	if room.name == "awakening":
+		radio_x, radio_y, radio_z = AWAKENING_RADIO_POS
+	else:
+		radio_x, radio_y, radio_z = SMALL_TABLE_RADIO_POS
 	r_pat, r_axis, r_r = _authored_speaker("old_radio")
+	# West-wall radio faces into the room (+X); table radio faces -Z.
+	if room.name == "awakening":
+		r_axis = (1.0, 0.0, 0.0)
 	return [
 		LevelSound(
 			"old_radio", radio_x, radio_y, radio_z, gain=0.10,
