@@ -1,0 +1,9 @@
+{
+	"version": 1,
+	"facility_id": "nullsight_wing_a",
+	"start_room": "awakening",
+	"rooms": [
+		"awakening"
+	],
+	"connections": []
+}
