@@ -1,0 +1,397 @@
+{
+	"version": 1,
+	"name": "awakening",
+	"footprint": {
+		"width": 14.0,
+		"depth": 12.0,
+		"floor_y": 0.0,
+		"ceiling_y": 3.6,
+		"edge_subdivisions": 1,
+		"shell_material": "concrete",
+		"gravity_floor": -1.2
+	},
+	"spawn": [
+		10.5,
+		-1.2,
+		2.0
+	],
+	"ops": [
+		{
+			"op": "outer_shell",
+			"floor": false
+		},
+		{
+			"op": "walkable_plate",
+			"x0": 0.0,
+			"z0": 0.0,
+			"x1": 8.0,
+			"z1": 12.0,
+			"top_y": 0.0,
+			"thickness": 0.12
+		},
+		{
+			"op": "walkable_plate",
+			"x0": 13.5,
+			"z0": 0.0,
+			"x1": 14.0,
+			"z1": 12.0,
+			"top_y": 0.0,
+			"thickness": 0.12
+		},
+		{
+			"op": "walkable_plate",
+			"x0": 8.0,
+			"z0": 4.0,
+			"x1": 13.5,
+			"z1": 12.0,
+			"top_y": 0.0,
+			"thickness": 0.12
+		},
+		{
+			"op": "walkable_plate",
+			"x0": 8.0,
+			"z0": 0.0,
+			"x1": 13.5,
+			"z1": 0.5,
+			"top_y": 0.0,
+			"thickness": 0.12
+		},
+		{
+			"op": "walkable_plate",
+			"x0": 8.0,
+			"z0": 0.5,
+			"x1": 13.5,
+			"z1": 4.0,
+			"top_y": -1.2,
+			"thickness": 0.08
+		},
+		{
+			"op": "box",
+			"bounds": [
+				8.0,
+				-1.04,
+				3.1,
+				13.5,
+				-0.9,
+				3.5
+			],
+			"walkable": true,
+			"occludes": false,
+			"collidable": false,
+			"material": "concrete"
+		},
+		{
+			"op": "environment_box",
+			"bounds": [
+				8.0,
+				-0.9,
+				3.1,
+				13.5,
+				-0.9,
+				3.5
+			]
+		},
+		{
+			"op": "box",
+			"bounds": [
+				8.0,
+				-0.74,
+				3.5,
+				13.5,
+				-0.6,
+				3.9
+			],
+			"walkable": true,
+			"occludes": false,
+			"collidable": false,
+			"material": "concrete"
+		},
+		{
+			"op": "environment_box",
+			"bounds": [
+				8.0,
+				-0.6,
+				3.5,
+				13.5,
+				-0.6,
+				3.9
+			]
+		},
+		{
+			"op": "box",
+			"bounds": [
+				8.0,
+				-0.44,
+				3.9,
+				13.5,
+				-0.3,
+				4.3
+			],
+			"walkable": true,
+			"occludes": false,
+			"collidable": false,
+			"material": "concrete"
+		},
+		{
+			"op": "environment_box",
+			"bounds": [
+				8.0,
+				-0.3,
+				3.9,
+				13.5,
+				-0.3,
+				4.3
+			]
+		},
+		{
+			"op": "box",
+			"bounds": [
+				7.88,
+				-1.2,
+				0.5,
+				8.0,
+				0.0,
+				4.0
+			],
+			"occludes": false,
+			"collidable": true,
+			"material": "concrete"
+		},
+		{
+			"op": "box",
+			"bounds": [
+				13.5,
+				-1.2,
+				0.5,
+				13.62,
+				0.0,
+				4.0
+			],
+			"occludes": false,
+			"collidable": true,
+			"material": "concrete"
+		},
+		{
+			"op": "box",
+			"bounds": [
+				8.0,
+				-1.2,
+				0.38,
+				13.5,
+				0.0,
+				0.5
+			],
+			"occludes": false,
+			"collidable": true,
+			"material": "concrete"
+		},
+		{
+			"op": "environment_box",
+			"bounds": [
+				8.0,
+				0.0,
+				0.5,
+				8.02,
+				0.0,
+				4.0
+			]
+		},
+		{
+			"op": "environment_box",
+			"bounds": [
+				13.48,
+				0.0,
+				0.5,
+				13.5,
+				0.0,
+				4.0
+			]
+		},
+		{
+			"op": "environment_box",
+			"bounds": [
+				8.0,
+				0.0,
+				0.5,
+				13.5,
+				0.0,
+				0.52
+			]
+		},
+		{
+			"op": "floor_grid",
+			"y": 0.0,
+			"x0": 0.0,
+			"z0": 0.0,
+			"x1": 8.0,
+			"z1": 12.0
+		},
+		{
+			"op": "floor_grid",
+			"y": 0.0,
+			"x0": 13.5,
+			"z0": 0.0,
+			"x1": 14.0,
+			"z1": 12.0
+		},
+		{
+			"op": "floor_grid",
+			"y": 0.0,
+			"x0": 8.0,
+			"z0": 4.0,
+			"x1": 13.5,
+			"z1": 12.0
+		},
+		{
+			"op": "floor_grid",
+			"y": 0.0,
+			"x0": 8.0,
+			"z0": 0.0,
+			"x1": 13.5,
+			"z1": 0.5
+		},
+		{
+			"op": "floor_grid",
+			"y": -1.2,
+			"x0": 8.0,
+			"z0": 0.5,
+			"x1": 13.5,
+			"z1": 4.0
+		},
+		{
+			"op": "divider_wall_x",
+			"x": 0.0,
+			"z0": 0.0,
+			"z1": 8.5,
+			"y0": 0.0,
+			"material": "concrete"
+		},
+		{
+			"op": "divider_wall_x",
+			"x": 0.0,
+			"z0": 9.5,
+			"z1": 12.0,
+			"y0": 0.0,
+			"material": "concrete"
+		},
+		{
+			"op": "divider_wall_x",
+			"x": 0.0,
+			"z0": 8.5,
+			"z1": 9.5,
+			"y0": 2.15,
+			"y1": 3.6,
+			"material": "concrete"
+		},
+		{
+			"op": "box",
+			"bounds": [
+				5.0,
+				1.15,
+				11.88,
+				8.5,
+				2.45,
+				11.98
+			],
+			"see_through": true,
+			"material": "glass"
+		},
+		{
+			"op": "box",
+			"bounds": [
+				4.0,
+				0.0,
+				5.2,
+				5.0,
+				3.6,
+				6.2
+			],
+			"material": "concrete"
+		},
+		{
+			"op": "box",
+			"bounds": [
+				0.15,
+				0.45,
+				5.05,
+				1.15,
+				0.55,
+				5.75
+			],
+			"material": "wood"
+		},
+		{
+			"op": "table_radio",
+			"x": 0.85,
+			"y": 0.55,
+			"z": 5.4,
+			"wall_x": 0.0
+		},
+		{
+			"op": "table",
+			"x0": 10.5,
+			"z0": 8.5,
+			"x1": 12.2,
+			"z1": 10.2,
+			"top_y": 0.75,
+			"material": "wood"
+		},
+		{
+			"op": "wall_x",
+			"x": 12.0,
+			"z0": 10.0,
+			"z1": 12.0,
+			"material": "concrete"
+		},
+		{
+			"op": "wall_z",
+			"z": 10.0,
+			"x0": 12.0,
+			"x1": 14.0,
+			"material": "concrete"
+		},
+		{
+			"op": "table",
+			"x0": 0.050000000000000044,
+			"z0": 7.5,
+			"x1": 1.45,
+			"z1": 8.5,
+			"top_y": 0.75,
+			"material": "wood"
+		},
+		{
+			"op": "table",
+			"x0": 1.8,
+			"z0": 5.25,
+			"x1": 3.2,
+			"z1": 6.25,
+			"top_y": 0.75,
+			"material": "wood"
+		},
+		{
+			"op": "table",
+			"x0": 2.55,
+			"z0": 10.0,
+			"x1": 3.95,
+			"z1": 11.0,
+			"top_y": 0.75,
+			"material": "wood"
+		},
+		{
+			"op": "table",
+			"x0": 5.55,
+			"z0": 9.75,
+			"x1": 6.95,
+			"z1": 10.75,
+			"top_y": 0.75,
+			"material": "wood"
+		}
+	],
+	"door": {
+		"wall": "west",
+		"z_center": 9.0,
+		"width": 1.0,
+		"height": 2.15,
+		"floor_y": 0.0
+	}
+}
